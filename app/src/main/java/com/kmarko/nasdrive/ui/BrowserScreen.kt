@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -15,9 +16,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DriveFileMove
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Logout
@@ -31,7 +34,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -40,7 +45,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -65,6 +73,12 @@ fun BrowserScreen(
     onStartMove: (NasEntry) -> Unit,
     onCancelMove: () -> Unit,
     onConfirmMove: () -> Unit,
+    onRequestCreateFolder: () -> Unit,
+    onCancelCreateFolder: () -> Unit,
+    onConfirmCreateFolder: (String) -> Unit,
+    onRequestRename: (NasEntry) -> Unit,
+    onCancelRename: () -> Unit,
+    onConfirmRename: (String) -> Unit,
     onDismissMessage: () -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -102,11 +116,17 @@ fun BrowserScreen(
         },
         floatingActionButton = {
             if (!moving) {
-                ExtendedFloatingActionButton(
-                    onClick = onUpload,
-                    icon = { Icon(Icons.Filled.Upload, contentDescription = null) },
-                    text = { Text("Upload") }
-                )
+                Column(horizontalAlignment = Alignment.End) {
+                    SmallFloatingActionButton(onClick = onRequestCreateFolder) {
+                        Icon(Icons.Filled.CreateNewFolder, contentDescription = "New folder")
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    ExtendedFloatingActionButton(
+                        onClick = onUpload,
+                        icon = { Icon(Icons.Filled.Upload, contentDescription = null) },
+                        text = { Text("Upload") }
+                    )
+                }
             }
         }
     ) { padding ->
@@ -134,9 +154,9 @@ fun BrowserScreen(
                     Text("This folder is empty", modifier = Modifier.align(Alignment.Center))
                 } else {
                     // Bottom padding keeps the last row(s) from being permanently hidden
-                    // under the floating Upload button, which sits on top of the list
-                    // rather than reserving its own space.
-                    LazyColumn(contentPadding = PaddingValues(bottom = 96.dp)) {
+                    // under the floating New folder/Upload buttons, which sit on top of
+                    // the list rather than reserving their own space.
+                    LazyColumn(contentPadding = PaddingValues(bottom = 160.dp)) {
                         items(state.entries) { entry ->
                             FileRow(
                                 entry = entry,
@@ -145,7 +165,8 @@ fun BrowserScreen(
                                 onOpen = onOpen,
                                 onDownload = onDownload,
                                 onDelete = onRequestDelete,
-                                onMove = onStartMove
+                                onMove = onStartMove,
+                                onRename = onRequestRename
                             )
                             HorizontalDivider()
                         }
@@ -186,6 +207,51 @@ fun BrowserScreen(
             }
         )
     }
+
+    if (state.creatingFolder) {
+        var name by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = onCancelCreateFolder,
+            title = { Text("New folder") },
+            text = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    singleLine = true,
+                    label = { Text("Folder name") }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { onConfirmCreateFolder(name) }) { Text("Create") }
+            },
+            dismissButton = {
+                TextButton(onClick = onCancelCreateFolder) { Text("Cancel") }
+            }
+        )
+    }
+
+    val renameTarget = state.renameTarget
+    if (renameTarget != null) {
+        var name by remember(renameTarget) { mutableStateOf(renameTarget.name) }
+        AlertDialog(
+            onDismissRequest = onCancelRename,
+            title = { Text("Rename") },
+            text = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    singleLine = true,
+                    label = { Text("Name") }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { onConfirmRename(name) }) { Text("Rename") }
+            },
+            dismissButton = {
+                TextButton(onClick = onCancelRename) { Text("Cancel") }
+            }
+        )
+    }
 }
 
 @Composable
@@ -210,7 +276,8 @@ private fun FileRow(
     onOpen: (NasEntry) -> Unit,
     onDownload: (NasEntry) -> Unit,
     onDelete: (NasEntry) -> Unit,
-    onMove: (NasEntry) -> Unit
+    onMove: (NasEntry) -> Unit,
+    onRename: (NasEntry) -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -237,6 +304,9 @@ private fun FileRow(
                 IconButton(onClick = { onDownload(entry) }) {
                     Icon(Icons.Filled.Download, contentDescription = "Download")
                 }
+            }
+            IconButton(onClick = { onRename(entry) }) {
+                Icon(Icons.Filled.Edit, contentDescription = "Rename")
             }
             IconButton(onClick = { onMove(entry) }) {
                 Icon(Icons.Filled.DriveFileMove, contentDescription = "Move")

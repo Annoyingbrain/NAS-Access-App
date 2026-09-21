@@ -40,7 +40,9 @@ data class UiState(
     val transfer: TransferProgress = TransferProgress(),
     val pendingDelete: NasEntry? = null,
     val move: MoveState? = null,
-    val openRequest: OpenFileRequest? = null
+    val openRequest: OpenFileRequest? = null,
+    val creatingFolder: Boolean = false,
+    val renameTarget: NasEntry? = null
 )
 
 class NasBrowserViewModel(application: Application) : AndroidViewModel(application) {
@@ -273,6 +275,71 @@ class NasBrowserViewModel(application: Application) : AndroidViewModel(applicati
                     loading = false,
                     move = null,
                     errorMessage = "Move failed: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun requestCreateFolder() {
+        _uiState.value = _uiState.value.copy(creatingFolder = true)
+    }
+
+    fun cancelCreateFolder() {
+        _uiState.value = _uiState.value.copy(creatingFolder = false)
+    }
+
+    fun confirmCreateFolder(name: String) {
+        val repo = repository ?: return
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) {
+            _uiState.value = _uiState.value.copy(creatingFolder = false)
+            return
+        }
+        val path = fullPath(_uiState.value.currentPath, trimmed)
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(creatingFolder = false, loading = true, errorMessage = null)
+            try {
+                repo.createFolder(path)
+                _uiState.value = _uiState.value.copy(loading = false, statusMessage = "Created $trimmed")
+                refresh()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    loading = false,
+                    errorMessage = "Create folder failed: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun requestRename(entry: NasEntry) {
+        _uiState.value = _uiState.value.copy(renameTarget = entry)
+    }
+
+    fun cancelRename() {
+        _uiState.value = _uiState.value.copy(renameTarget = null)
+    }
+
+    fun confirmRename(newName: String) {
+        val repo = repository ?: return
+        val entry = _uiState.value.renameTarget ?: return
+        val trimmed = newName.trim()
+        if (trimmed.isBlank() || trimmed == entry.name) {
+            _uiState.value = _uiState.value.copy(renameTarget = null)
+            return
+        }
+        val current = _uiState.value.currentPath
+        val sourcePath = fullPath(current, entry.name)
+        val destPath = fullPath(current, trimmed)
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(renameTarget = null, loading = true, errorMessage = null)
+            try {
+                repo.move(sourcePath, destPath, entry.isDirectory)
+                _uiState.value = _uiState.value.copy(loading = false, statusMessage = "Renamed to $trimmed")
+                refresh()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    loading = false,
+                    errorMessage = "Rename failed: ${e.message}"
                 )
             }
         }

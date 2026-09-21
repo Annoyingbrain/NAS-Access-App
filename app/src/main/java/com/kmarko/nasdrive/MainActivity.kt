@@ -85,6 +85,12 @@ class MainActivity : ComponentActivity() {
                         onStartMove = { viewModel.startMove(it) },
                         onCancelMove = { viewModel.cancelMove() },
                         onConfirmMove = { viewModel.confirmMoveHere() },
+                        onRequestCreateFolder = { viewModel.requestCreateFolder() },
+                        onCancelCreateFolder = { viewModel.cancelCreateFolder() },
+                        onConfirmCreateFolder = { viewModel.confirmCreateFolder(it) },
+                        onRequestRename = { viewModel.requestRename(it) },
+                        onCancelRename = { viewModel.cancelRename() },
+                        onConfirmRename = { viewModel.confirmRename(it) },
                         onDismissMessage = { viewModel.clearMessages() }
                     )
                 }

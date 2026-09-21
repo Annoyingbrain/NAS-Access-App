@@ -106,6 +106,11 @@ class SmbRepository(private val config: SmbConfig) {
         source.renameTo(dest)
     }
 
+    suspend fun createFolder(path: String) = withContext(Dispatchers.IO) {
+        val dir = SmbFile(buildUrl(path, true), cifsContext)
+        dir.mkdir()
+    }
+
     /** Called from NasStreamServer's own request-handling threads, one fresh handle per request. */
     internal fun openRandomAccess(remotePath: String): SmbRandomAccessFile {
         val file = SmbFile(buildUrl(remotePath, false), cifsContext)
