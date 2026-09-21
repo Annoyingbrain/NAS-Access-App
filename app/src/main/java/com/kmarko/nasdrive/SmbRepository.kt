@@ -7,6 +7,7 @@ import jcifs.config.PropertyConfiguration
 import jcifs.context.BaseContext
 import jcifs.smb.NtlmPasswordAuthenticator
 import jcifs.smb.SmbFile
+import jcifs.smb.SmbRandomAccessFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.InputStream
@@ -36,6 +37,8 @@ class SmbRepository(private val config: SmbConfig) {
         val base: CIFSContext = BaseContext(PropertyConfiguration(props))
         base.withCredentials(NtlmPasswordAuthenticator(config.domain, config.username, config.password))
     }
+
+    private var streamServer: NasStreamServer? = null
 
     private fun buildUrl(path: String, isDirectory: Boolean): String {
         // jcifs-ng's SmbFile(String, CIFSContext) does not URL-decode the path - it
@@ -103,6 +106,21 @@ class SmbRepository(private val config: SmbConfig) {
         source.renameTo(dest)
     }
 
+    /** Called from NasStreamServer's own request-handling threads, one fresh handle per request. */
+    internal fun openRandomAccess(remotePath: String): SmbRandomAccessFile {
+        val file = SmbFile(buildUrl(remotePath, false), cifsContext)
+        return SmbRandomAccessFile(file, "r")
+    }
+
+    /** Starts the loopback streaming proxy on first use and returns a playable URL for [remotePath]. */
+    suspend fun streamUrl(remotePath: String): String = withContext(Dispatchers.IO) {
+        val server = streamServer ?: NasStreamServer(this@SmbRepository).also {
+            it.start()
+            streamServer = it
+        }
+        server.urlFor(remotePath)
+    }
+
     private fun copyStream(input: InputStream, output: OutputStream, onProgress: (Long) -> Unit) {
         val buffer = ByteArray(256 * 1024)
         var total = 0L
@@ -116,5 +134,7 @@ class SmbRepository(private val config: SmbConfig) {
 
     fun close() {
         // jcifs-ng pools its own connections internally; nothing to release per-session.
+        streamServer?.stop()
+        streamServer = null
     }
 }

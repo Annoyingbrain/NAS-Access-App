@@ -57,6 +57,7 @@ fun BrowserScreen(
     onRefresh: () -> Unit,
     onDisconnect: () -> Unit,
     onDownload: (NasEntry) -> Unit,
+    onOpen: (NasEntry) -> Unit,
     onUpload: () -> Unit,
     onRequestDelete: (NasEntry) -> Unit,
     onCancelDelete: () -> Unit,
@@ -141,6 +142,7 @@ fun BrowserScreen(
                                 entry = entry,
                                 actionsEnabled = !moving,
                                 onOpenFolder = onOpenFolder,
+                                onOpen = onOpen,
                                 onDownload = onDownload,
                                 onDelete = onRequestDelete,
                                 onMove = onStartMove
@@ -205,6 +207,7 @@ private fun FileRow(
     entry: NasEntry,
     actionsEnabled: Boolean,
     onOpenFolder: (String) -> Unit,
+    onOpen: (NasEntry) -> Unit,
     onDownload: (NasEntry) -> Unit,
     onDelete: (NasEntry) -> Unit,
     onMove: (NasEntry) -> Unit
@@ -212,7 +215,9 @@ private fun FileRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = entry.isDirectory) { onOpenFolder(entry.name) }
+            .clickable(enabled = entry.isDirectory || actionsEnabled) {
+                if (entry.isDirectory) onOpenFolder(entry.name) else onOpen(entry)
+            }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

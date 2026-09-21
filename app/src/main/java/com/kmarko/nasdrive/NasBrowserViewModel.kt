@@ -24,6 +24,11 @@ data class MoveState(
     val sourcePath: String
 )
 
+data class OpenFileRequest(
+    val url: String,
+    val mimeType: String
+)
+
 data class UiState(
     val screen: Screen = Screen.CONNECT,
     val savedConfig: SmbConfig? = null,
@@ -34,7 +39,8 @@ data class UiState(
     val statusMessage: String? = null,
     val transfer: TransferProgress = TransferProgress(),
     val pendingDelete: NasEntry? = null,
-    val move: MoveState? = null
+    val move: MoveState? = null,
+    val openRequest: OpenFileRequest? = null
 )
 
 class NasBrowserViewModel(application: Application) : AndroidViewModel(application) {
@@ -181,6 +187,26 @@ class NasBrowserViewModel(application: Application) : AndroidViewModel(applicati
                 )
             }
         }
+    }
+
+    fun openFile(entry: NasEntry) {
+        if (entry.isDirectory) return
+        val repo = repository ?: return
+        val remotePath = fullPath(_uiState.value.currentPath, entry.name)
+        viewModelScope.launch {
+            try {
+                val url = repo.streamUrl(remotePath)
+                _uiState.value = _uiState.value.copy(
+                    openRequest = OpenFileRequest(url, guessMimeType(entry.name))
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(errorMessage = "Open failed: ${e.message}")
+            }
+        }
+    }
+
+    fun clearOpenRequest() {
+        _uiState.value = _uiState.value.copy(openRequest = null)
     }
 
     fun clearMessages() {
