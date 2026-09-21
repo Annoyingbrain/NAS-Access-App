@@ -1,6 +1,8 @@
 package com.kmarko.nasdrive.ui
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -58,12 +61,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import com.kmarko.nasdrive.CopyState
 import com.kmarko.nasdrive.MoveState
 import com.kmarko.nasdrive.NasEntry
 import com.kmarko.nasdrive.SortOption
 import com.kmarko.nasdrive.UiState
+import com.kmarko.nasdrive.isImageFile
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -100,6 +107,7 @@ fun BrowserScreen(
     onMoveSelected: () -> Unit,
     onCopySelected: () -> Unit,
     onSetSortOption: (SortOption) -> Unit,
+    onLoadThumbnail: suspend (NasEntry) -> Bitmap?,
     onDismissMessage: () -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -245,7 +253,8 @@ fun BrowserScreen(
                                 onMove = onStartMove,
                                 onCopy = onStartCopy,
                                 onRename = onRequestRename,
-                                onToggleSelection = onToggleSelection
+                                onToggleSelection = onToggleSelection,
+                                onLoadThumbnail = onLoadThumbnail
                             )
                             HorizontalDivider()
                         }
@@ -396,7 +405,8 @@ private fun FileRow(
     onMove: (NasEntry) -> Unit,
     onCopy: (NasEntry) -> Unit,
     onRename: (NasEntry) -> Unit,
-    onToggleSelection: (NasEntry) -> Unit
+    onToggleSelection: (NasEntry) -> Unit,
+    onLoadThumbnail: suspend (NasEntry) -> Bitmap?
 ) {
     Row(
         modifier = Modifier
@@ -418,11 +428,36 @@ private fun FileRow(
             Checkbox(checked = isSelected, onCheckedChange = { onToggleSelection(entry) })
             Spacer(modifier = Modifier.width(8.dp))
         }
-        Icon(
-            if (entry.isDirectory) Icons.Filled.Folder else Icons.Filled.InsertDriveFile,
-            contentDescription = null,
-            modifier = Modifier.padding(end = 16.dp)
-        )
+        if (!entry.isDirectory && isImageFile(entry.name)) {
+            var thumbnail by remember(entry.name) { mutableStateOf<Bitmap?>(null) }
+            LaunchedEffect(entry.name) {
+                thumbnail = onLoadThumbnail(entry)
+            }
+            val loaded = thumbnail
+            if (loaded != null) {
+                Image(
+                    bitmap = loaded.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .padding(end = 16.dp)
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                )
+            } else {
+                Icon(
+                    Icons.Filled.InsertDriveFile,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 16.dp)
+                )
+            }
+        } else {
+            Icon(
+                if (entry.isDirectory) Icons.Filled.Folder else Icons.Filled.InsertDriveFile,
+                contentDescription = null,
+                modifier = Modifier.padding(end = 16.dp)
+            )
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(entry.name, style = MaterialTheme.typography.bodyLarge)
             val subtitle = if (entry.isDirectory) {

@@ -100,6 +100,7 @@ class MainActivity : ComponentActivity() {
                         onMoveSelected = { viewModel.startMoveSelected() },
                         onCopySelected = { viewModel.startCopySelected() },
                         onSetSortOption = { viewModel.setSortOption(it) },
+                        onLoadThumbnail = { viewModel.loadThumbnail(it) },
                         onDismissMessage = { viewModel.clearMessages() }
                     )
                 }

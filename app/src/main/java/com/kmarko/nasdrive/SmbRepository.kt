@@ -1,6 +1,8 @@
 package com.kmarko.nasdrive
 
 import android.content.ContentResolver
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import jcifs.CIFSContext
 import jcifs.config.PropertyConfiguration
@@ -124,6 +126,30 @@ class SmbRepository(private val config: SmbConfig) {
         dir.mkdir()
     }
 
+    /**
+     * Downsampled preview for the file browser's thumbnail grid cells. Skips files
+     * above [MAX_THUMBNAIL_SOURCE_BYTES] rather than pulling a huge original over SMB
+     * just to shrink it, and returns null (falls back to the generic file icon) on
+     * any decode failure instead of surfacing an error - a missing thumbnail isn't
+     * worth interrupting browsing over.
+     */
+    suspend fun loadThumbnail(remotePath: String, maxDimension: Int = 256): Bitmap? = withContext(Dispatchers.IO) {
+        try {
+            val file = SmbFile(buildUrl(remotePath, false), cifsContext)
+            if (file.length() > MAX_THUMBNAIL_SOURCE_BYTES) return@withContext null
+            val bytes = file.inputStream.use { it.readBytes() }
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            var sample = 1
+            while (bounds.outWidth / sample > maxDimension * 2 || bounds.outHeight / sample > maxDimension * 2) {
+                sample *= 2
+            }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     /** Called from NasStreamServer's own request-handling threads, one fresh handle per request. */
     internal fun openRandomAccess(remotePath: String): SmbRandomAccessFile {
         val file = SmbFile(buildUrl(remotePath, false), cifsContext)
@@ -154,5 +180,9 @@ class SmbRepository(private val config: SmbConfig) {
         // jcifs-ng pools its own connections internally; nothing to release per-session.
         streamServer?.stop()
         streamServer = null
+    }
+
+    private companion object {
+        const val MAX_THUMBNAIL_SOURCE_BYTES = 8L * 1024 * 1024
     }
 }

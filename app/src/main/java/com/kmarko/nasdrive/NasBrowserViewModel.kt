@@ -2,6 +2,7 @@ package com.kmarko.nasdrive
 
 import android.app.Application
 import android.content.ContentResolver
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -71,6 +72,10 @@ class NasBrowserViewModel(application: Application) : AndroidViewModel(applicati
 
     private val configStore = ConfigStore(application)
     private var repository: SmbRepository? = null
+
+    // Keyed by remote path, outside UiState/StateFlow since bitmaps don't need to
+    // drive recomposition on their own - FileRow reads through loadThumbnail().
+    private val thumbnailCache = mutableMapOf<String, Bitmap?>()
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -160,7 +165,19 @@ class NasBrowserViewModel(application: Application) : AndroidViewModel(applicati
     fun disconnect() {
         repository?.close()
         repository = null
+        thumbnailCache.clear()
         _uiState.value = UiState(savedConfig = _uiState.value.savedConfig)
+    }
+
+    suspend fun loadThumbnail(entry: NasEntry): Bitmap? {
+        if (entry.isDirectory || !isImageFile(entry.name)) return null
+        val repo = repository ?: return null
+        val path = fullPath(_uiState.value.currentPath, entry.name)
+        thumbnailCache[path]?.let { return it }
+        if (thumbnailCache.containsKey(path)) return null // cached miss - don't retry every recomposition
+        val bitmap = repo.loadThumbnail(path)
+        thumbnailCache[path] = bitmap
+        return bitmap
     }
 
     fun downloadFile(entry: NasEntry, destUri: Uri, resolver: ContentResolver) {
