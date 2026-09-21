@@ -85,6 +85,9 @@ class MainActivity : ComponentActivity() {
                         onStartMove = { viewModel.startMove(it) },
                         onCancelMove = { viewModel.cancelMove() },
                         onConfirmMove = { viewModel.confirmMoveHere() },
+                        onStartCopy = { viewModel.startCopy(it) },
+                        onCancelCopy = { viewModel.cancelCopy() },
+                        onConfirmCopy = { viewModel.confirmCopyHere() },
                         onRequestCreateFolder = { viewModel.requestCreateFolder() },
                         onCancelCreateFolder = { viewModel.cancelCreateFolder() },
                         onConfirmCreateFolder = { viewModel.confirmCreateFolder(it) },
@@ -95,6 +98,7 @@ class MainActivity : ComponentActivity() {
                         onClearSelection = { viewModel.clearSelection() },
                         onDeleteSelected = { viewModel.requestDeleteSelected() },
                         onMoveSelected = { viewModel.startMoveSelected() },
+                        onCopySelected = { viewModel.startCopySelected() },
                         onSetSortOption = { viewModel.setSortOption(it) },
                         onDismissMessage = { viewModel.clearMessages() }
                     )

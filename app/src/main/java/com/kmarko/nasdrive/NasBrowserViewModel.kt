@@ -26,6 +26,11 @@ data class MoveState(
     val sourcePath: String
 )
 
+data class CopyState(
+    val entries: List<NasEntry>,
+    val sourcePath: String
+)
+
 data class OpenFileRequest(
     val url: String,
     val mimeType: String
@@ -42,6 +47,7 @@ data class UiState(
     val transfer: TransferProgress = TransferProgress(),
     val pendingDelete: List<NasEntry> = emptyList(),
     val move: MoveState? = null,
+    val copyState: CopyState? = null,
     val openRequest: OpenFileRequest? = null,
     val creatingFolder: Boolean = false,
     val renameTarget: NasEntry? = null,
@@ -301,14 +307,18 @@ class NasBrowserViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun startMove(entry: NasEntry) {
-        _uiState.value = _uiState.value.copy(move = MoveState(listOf(entry), _uiState.value.currentPath))
+        _uiState.value = _uiState.value.copy(move = MoveState(listOf(entry), _uiState.value.currentPath), copyState = null)
     }
 
     fun startMoveSelected() {
         val state = _uiState.value
         val entries = state.entries.filter { state.selectedNames.contains(it.name) }
         if (entries.isEmpty()) return
-        _uiState.value = state.copy(move = MoveState(entries, state.currentPath), selectedNames = emptySet())
+        _uiState.value = state.copy(
+            move = MoveState(entries, state.currentPath),
+            copyState = null,
+            selectedNames = emptySet()
+        )
     }
 
     fun cancelMove() {
@@ -377,6 +387,94 @@ class NasBrowserViewModel(application: Application) : AndroidViewModel(applicati
             _uiState.value = _uiState.value.copy(
                 loading = false,
                 move = null,
+                statusMessage = if (failed == 0) message else null,
+                errorMessage = if (failed > 0) message else null
+            )
+            refresh()
+        }
+    }
+
+    fun startCopy(entry: NasEntry) {
+        _uiState.value = _uiState.value.copy(copyState = CopyState(listOf(entry), _uiState.value.currentPath), move = null)
+    }
+
+    fun startCopySelected() {
+        val state = _uiState.value
+        val entries = state.entries.filter { state.selectedNames.contains(it.name) }
+        if (entries.isEmpty()) return
+        _uiState.value = state.copy(
+            copyState = CopyState(entries, state.currentPath),
+            move = null,
+            selectedNames = emptySet()
+        )
+    }
+
+    fun cancelCopy() {
+        _uiState.value = _uiState.value.copy(copyState = null)
+    }
+
+    fun confirmCopyHere() {
+        val repo = repository ?: return
+        val pendingCopy = _uiState.value.copyState ?: return
+        val current = _uiState.value.currentPath
+
+        if (pendingCopy.entries.size == 1) {
+            val entry = pendingCopy.entries.first()
+            val sourcePath = fullPath(pendingCopy.sourcePath, entry.name)
+            val destPath = fullPath(current, entry.name)
+            if (sourcePath == destPath) {
+                _uiState.value = _uiState.value.copy(copyState = null, errorMessage = "Choose a different folder to copy into")
+                return
+            }
+            viewModelScope.launch {
+                _uiState.value = _uiState.value.copy(loading = true, errorMessage = null)
+                try {
+                    repo.copy(sourcePath, destPath, entry.isDirectory)
+                    _uiState.value = _uiState.value.copy(
+                        loading = false,
+                        copyState = null,
+                        statusMessage = "Copied ${entry.name}"
+                    )
+                    refresh()
+                } catch (e: Exception) {
+                    _uiState.value = _uiState.value.copy(
+                        loading = false,
+                        copyState = null,
+                        errorMessage = "Copy failed: ${e.message}"
+                    )
+                }
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(loading = true, errorMessage = null)
+            var copied = 0
+            var skipped = 0
+            var failed = 0
+            for (entry in pendingCopy.entries) {
+                val sourcePath = fullPath(pendingCopy.sourcePath, entry.name)
+                val destPath = fullPath(current, entry.name)
+                if (sourcePath == destPath) {
+                    skipped++
+                    continue
+                }
+                try {
+                    repo.copy(sourcePath, destPath, entry.isDirectory)
+                    copied++
+                } catch (e: Exception) {
+                    failed++
+                }
+            }
+            val message = buildString {
+                append("Copied $copied item")
+                if (copied != 1) append("s")
+                if (skipped > 0) append(", $skipped skipped (same folder)")
+                if (failed > 0) append(", $failed failed")
+            }
+            _uiState.value = _uiState.value.copy(
+                loading = false,
+                copyState = null,
                 statusMessage = if (failed == 0) message else null,
                 errorMessage = if (failed > 0) message else null
             )

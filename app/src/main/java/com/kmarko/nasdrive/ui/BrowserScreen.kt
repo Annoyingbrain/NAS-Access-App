@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
@@ -58,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.kmarko.nasdrive.CopyState
 import com.kmarko.nasdrive.MoveState
 import com.kmarko.nasdrive.NasEntry
 import com.kmarko.nasdrive.SortOption
@@ -83,6 +85,9 @@ fun BrowserScreen(
     onStartMove: (NasEntry) -> Unit,
     onCancelMove: () -> Unit,
     onConfirmMove: () -> Unit,
+    onStartCopy: (NasEntry) -> Unit,
+    onCancelCopy: () -> Unit,
+    onConfirmCopy: () -> Unit,
     onRequestCreateFolder: () -> Unit,
     onCancelCreateFolder: () -> Unit,
     onConfirmCreateFolder: (String) -> Unit,
@@ -93,11 +98,13 @@ fun BrowserScreen(
     onClearSelection: () -> Unit,
     onDeleteSelected: () -> Unit,
     onMoveSelected: () -> Unit,
+    onCopySelected: () -> Unit,
     onSetSortOption: (SortOption) -> Unit,
     onDismissMessage: () -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val moving = state.move != null
+    val copying = state.copyState != null
 
     LaunchedEffect(state.errorMessage, state.statusMessage) {
         val message = state.errorMessage ?: state.statusMessage
@@ -119,6 +126,9 @@ fun BrowserScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = onCopySelected) {
+                            Icon(Icons.Filled.ContentCopy, contentDescription = "Copy selected")
+                        }
                         IconButton(onClick = onMoveSelected) {
                             Icon(Icons.Filled.DriveFileMove, contentDescription = "Move selected")
                         }
@@ -172,7 +182,7 @@ fun BrowserScreen(
             }
         },
         floatingActionButton = {
-            if (!moving && !state.isSelecting) {
+            if (!moving && !copying && !state.isSelecting) {
                 Column(horizontalAlignment = Alignment.End) {
                     SmallFloatingActionButton(onClick = onRequestCreateFolder) {
                         Icon(Icons.Filled.CreateNewFolder, contentDescription = "New folder")
@@ -199,6 +209,13 @@ fun BrowserScreen(
                     onMoveHere = onConfirmMove,
                     onCancel = onCancelMove
                 )
+            } else if (state.copyState != null) {
+                CopyBanner(
+                    copyState = state.copyState,
+                    destination = if (state.currentPath.isBlank()) "/ (root)" else "/${state.currentPath}",
+                    onCopyHere = onConfirmCopy,
+                    onCancel = onCancelCopy
+                )
             }
             Box(
                 modifier = Modifier
@@ -217,15 +234,16 @@ fun BrowserScreen(
                         items(state.displayEntries) { entry ->
                             FileRow(
                                 entry = entry,
-                                actionsEnabled = !moving && !state.isSelecting,
+                                actionsEnabled = !moving && !copying && !state.isSelecting,
                                 selecting = state.isSelecting,
                                 isSelected = state.selectedNames.contains(entry.name),
-                                moving = moving,
+                                moving = moving || copying,
                                 onOpenFolder = onOpenFolder,
                                 onOpen = onOpen,
                                 onDownload = onDownload,
                                 onDelete = onRequestDelete,
                                 onMove = onStartMove,
+                                onCopy = onStartCopy,
                                 onRename = onRequestRename,
                                 onToggleSelection = onToggleSelection
                             )
@@ -344,6 +362,25 @@ private fun MoveBanner(move: MoveState, destination: String, onMoveHere: () -> U
     }
 }
 
+@Composable
+private fun CopyBanner(copyState: CopyState, destination: String, onCopyHere: () -> Unit, onCancel: () -> Unit) {
+    Surface(tonalElevation = 4.dp, modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            val title = if (copyState.entries.size == 1) {
+                "Copying \"${copyState.entries.first().name}\""
+            } else {
+                "Copying ${copyState.entries.size} items"
+            }
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text("Browse to a folder, then copy it here. Currently: $destination", style = MaterialTheme.typography.bodySmall)
+            Row(modifier = Modifier.padding(top = 8.dp)) {
+                TextButton(onClick = onCancel) { Text("Cancel") }
+                TextButton(onClick = onCopyHere) { Text("Copy here") }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileRow(
@@ -357,6 +394,7 @@ private fun FileRow(
     onDownload: (NasEntry) -> Unit,
     onDelete: (NasEntry) -> Unit,
     onMove: (NasEntry) -> Unit,
+    onCopy: (NasEntry) -> Unit,
     onRename: (NasEntry) -> Unit,
     onToggleSelection: (NasEntry) -> Unit
 ) {
@@ -402,6 +440,9 @@ private fun FileRow(
             }
             IconButton(onClick = { onRename(entry) }) {
                 Icon(Icons.Filled.Edit, contentDescription = "Rename")
+            }
+            IconButton(onClick = { onCopy(entry) }) {
+                Icon(Icons.Filled.ContentCopy, contentDescription = "Copy")
             }
             IconButton(onClick = { onMove(entry) }) {
                 Icon(Icons.Filled.DriveFileMove, contentDescription = "Move")

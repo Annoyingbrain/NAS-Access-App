@@ -110,6 +110,15 @@ class SmbRepository(private val config: SmbConfig) {
         source.renameTo(dest)
     }
 
+    suspend fun copy(sourcePath: String, destPath: String, isDirectory: Boolean) = withContext(Dispatchers.IO) {
+        // SmbFile.copyTo() streams the data client-side (there's no server-side
+        // remote-copy call wired up here) but handles directories recursively on
+        // its own, same as delete().
+        val source = SmbFile(buildUrl(sourcePath, isDirectory), cifsContext)
+        val dest = SmbFile(buildUrl(destPath, isDirectory), cifsContext)
+        source.copyTo(dest)
+    }
+
     suspend fun createFolder(path: String) = withContext(Dispatchers.IO) {
         val dir = SmbFile(buildUrl(path, true), cifsContext)
         dir.mkdir()
