@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
@@ -509,17 +510,33 @@ private fun FileRow(
                     Icon(Icons.Filled.Download, contentDescription = "Download")
                 }
             }
-            IconButton(onClick = { onRename(entry) }) {
-                Icon(Icons.Filled.Edit, contentDescription = "Rename")
-            }
-            IconButton(onClick = { onCopy(entry) }) {
-                Icon(Icons.Filled.ContentCopy, contentDescription = "Copy")
-            }
-            IconButton(onClick = { onMove(entry) }) {
-                Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = "Move")
-            }
-            IconButton(onClick = { onDelete(entry) }) {
-                Icon(Icons.Filled.Delete, contentDescription = "Delete")
+            var menuExpanded by remember { mutableStateOf(false) }
+            Box {
+                IconButton(onClick = { menuExpanded = true }) {
+                    Icon(Icons.Filled.MoreVert, contentDescription = "More actions")
+                }
+                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Rename") },
+                        leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                        onClick = { menuExpanded = false; onRename(entry) }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Copy") },
+                        leadingIcon = { Icon(Icons.Filled.ContentCopy, contentDescription = null) },
+                        onClick = { menuExpanded = false; onCopy(entry) }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Move") },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = null) },
+                        onClick = { menuExpanded = false; onMove(entry) }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Delete") },
+                        leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                        onClick = { menuExpanded = false; onDelete(entry) }
+                    )
+                }
             }
         }
     }
