@@ -21,19 +21,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.InsertDriveFile
-import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -143,7 +143,7 @@ fun BrowserScreen(
                             Icon(Icons.Filled.ContentCopy, contentDescription = "Copy selected")
                         }
                         IconButton(onClick = onMoveSelected) {
-                            Icon(Icons.Filled.DriveFileMove, contentDescription = "Move selected")
+                            Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = "Move selected")
                         }
                         IconButton(onClick = onDeleteSelected) {
                             Icon(Icons.Filled.Delete, contentDescription = "Delete selected")
@@ -156,7 +156,7 @@ fun BrowserScreen(
                     navigationIcon = {
                         if (state.currentPath.isNotBlank()) {
                             IconButton(onClick = onNavigateUp) {
-                                Icon(Icons.Filled.ArrowBack, contentDescription = "Up")
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Up")
                             }
                         }
                     },
@@ -164,7 +164,7 @@ fun BrowserScreen(
                         var sortMenuExpanded by remember { mutableStateOf(false) }
                         Box {
                             IconButton(onClick = { sortMenuExpanded = true }) {
-                                Icon(Icons.Filled.Sort, contentDescription = "Sort")
+                                Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
                             }
                             DropdownMenu(
                                 expanded = sortMenuExpanded,
@@ -188,7 +188,7 @@ fun BrowserScreen(
                             Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
                         }
                         IconButton(onClick = onDisconnect) {
-                            Icon(Icons.Filled.Logout, contentDescription = "Disconnect")
+                            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Disconnect")
                         }
                     }
                 )
@@ -482,14 +482,14 @@ private fun FileRow(
                 )
             } else {
                 Icon(
-                    Icons.Filled.InsertDriveFile,
+                    Icons.AutoMirrored.Filled.InsertDriveFile,
                     contentDescription = null,
                     modifier = Modifier.padding(end = 16.dp)
                 )
             }
         } else {
             Icon(
-                if (entry.isDirectory) Icons.Filled.Folder else Icons.Filled.InsertDriveFile,
+                if (entry.isDirectory) Icons.Filled.Folder else Icons.AutoMirrored.Filled.InsertDriveFile,
                 contentDescription = null,
                 modifier = Modifier.padding(end = 16.dp)
             )
@@ -516,7 +516,7 @@ private fun FileRow(
                 Icon(Icons.Filled.ContentCopy, contentDescription = "Copy")
             }
             IconButton(onClick = { onMove(entry) }) {
-                Icon(Icons.Filled.DriveFileMove, contentDescription = "Move")
+                Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = "Move")
             }
             IconButton(onClick = { onDelete(entry) }) {
                 Icon(Icons.Filled.Delete, contentDescription = "Delete")
