@@ -20,7 +20,7 @@ data class TransferProgress(
 )
 
 data class MoveState(
-    val entry: NasEntry,
+    val entries: List<NasEntry>,
     val sourcePath: String
 )
 
@@ -38,12 +38,15 @@ data class UiState(
     val errorMessage: String? = null,
     val statusMessage: String? = null,
     val transfer: TransferProgress = TransferProgress(),
-    val pendingDelete: NasEntry? = null,
+    val pendingDelete: List<NasEntry> = emptyList(),
     val move: MoveState? = null,
     val openRequest: OpenFileRequest? = null,
     val creatingFolder: Boolean = false,
-    val renameTarget: NasEntry? = null
-)
+    val renameTarget: NasEntry? = null,
+    val selectedNames: Set<String> = emptySet()
+) {
+    val isSelecting: Boolean get() = selectedNames.isNotEmpty()
+}
 
 class NasBrowserViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -111,7 +114,12 @@ class NasBrowserViewModel(application: Application) : AndroidViewModel(applicati
                 // currentPath only advances on success, so a failed open leaves
                 // navigation where it was instead of leaving a broken path that
                 // the next tap would silently build on top of.
-                _uiState.value = _uiState.value.copy(loading = false, currentPath = newPath, entries = entries)
+                _uiState.value = _uiState.value.copy(
+                    loading = false,
+                    currentPath = newPath,
+                    entries = entries,
+                    selectedNames = emptySet()
+                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     loading = false,
@@ -126,7 +134,7 @@ class NasBrowserViewModel(application: Application) : AndroidViewModel(applicati
         if (current.isBlank()) return
         val idx = current.lastIndexOf('/')
         val newPath = if (idx <= 0) "" else current.substring(0, idx)
-        _uiState.value = _uiState.value.copy(currentPath = newPath)
+        _uiState.value = _uiState.value.copy(currentPath = newPath, selectedNames = emptySet())
         refresh()
     }
 
@@ -216,34 +224,78 @@ class NasBrowserViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun requestDelete(entry: NasEntry) {
-        _uiState.value = _uiState.value.copy(pendingDelete = entry)
+        _uiState.value = _uiState.value.copy(pendingDelete = listOf(entry))
+    }
+
+    fun requestDeleteSelected() {
+        val state = _uiState.value
+        val entries = state.entries.filter { state.selectedNames.contains(it.name) }
+        if (entries.isEmpty()) return
+        _uiState.value = state.copy(pendingDelete = entries)
     }
 
     fun cancelDelete() {
-        _uiState.value = _uiState.value.copy(pendingDelete = null)
+        _uiState.value = _uiState.value.copy(pendingDelete = emptyList())
     }
 
     fun confirmDelete() {
         val repo = repository ?: return
-        val entry = _uiState.value.pendingDelete ?: return
-        val path = fullPath(_uiState.value.currentPath, entry.name)
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(pendingDelete = null, loading = true, errorMessage = null)
-            try {
-                repo.delete(path, entry.isDirectory)
-                _uiState.value = _uiState.value.copy(loading = false, statusMessage = "Deleted ${entry.name}")
-                refresh()
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    loading = false,
-                    errorMessage = "Delete failed: ${e.message}"
-                )
+        val entries = _uiState.value.pendingDelete
+        if (entries.isEmpty()) return
+        val current = _uiState.value.currentPath
+
+        if (entries.size == 1) {
+            val entry = entries.first()
+            viewModelScope.launch {
+                _uiState.value = _uiState.value.copy(pendingDelete = emptyList(), loading = true, errorMessage = null)
+                try {
+                    repo.delete(fullPath(current, entry.name), entry.isDirectory)
+                    _uiState.value = _uiState.value.copy(
+                        loading = false,
+                        selectedNames = emptySet(),
+                        statusMessage = "Deleted ${entry.name}"
+                    )
+                    refresh()
+                } catch (e: Exception) {
+                    _uiState.value = _uiState.value.copy(
+                        loading = false,
+                        errorMessage = "Delete failed: ${e.message}"
+                    )
+                }
             }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(pendingDelete = emptyList(), loading = true, errorMessage = null)
+            var failed = 0
+            for (entry in entries) {
+                try {
+                    repo.delete(fullPath(current, entry.name), entry.isDirectory)
+                } catch (e: Exception) {
+                    failed++
+                }
+            }
+            val succeeded = entries.size - failed
+            _uiState.value = _uiState.value.copy(
+                loading = false,
+                selectedNames = emptySet(),
+                statusMessage = if (failed == 0) "Deleted $succeeded items" else null,
+                errorMessage = if (failed > 0) "Deleted $succeeded/${entries.size} items, $failed failed" else null
+            )
+            refresh()
         }
     }
 
     fun startMove(entry: NasEntry) {
-        _uiState.value = _uiState.value.copy(move = MoveState(entry, _uiState.value.currentPath))
+        _uiState.value = _uiState.value.copy(move = MoveState(listOf(entry), _uiState.value.currentPath))
+    }
+
+    fun startMoveSelected() {
+        val state = _uiState.value
+        val entries = state.entries.filter { state.selectedNames.contains(it.name) }
+        if (entries.isEmpty()) return
+        _uiState.value = state.copy(move = MoveState(entries, state.currentPath), selectedNames = emptySet())
     }
 
     fun cancelMove() {
@@ -254,30 +306,79 @@ class NasBrowserViewModel(application: Application) : AndroidViewModel(applicati
         val repo = repository ?: return
         val move = _uiState.value.move ?: return
         val current = _uiState.value.currentPath
-        val sourcePath = fullPath(move.sourcePath, move.entry.name)
-        val destPath = fullPath(current, move.entry.name)
-        if (sourcePath == destPath) {
-            _uiState.value = _uiState.value.copy(move = null, errorMessage = "Already in this folder")
+
+        if (move.entries.size == 1) {
+            val entry = move.entries.first()
+            val sourcePath = fullPath(move.sourcePath, entry.name)
+            val destPath = fullPath(current, entry.name)
+            if (sourcePath == destPath) {
+                _uiState.value = _uiState.value.copy(move = null, errorMessage = "Already in this folder")
+                return
+            }
+            viewModelScope.launch {
+                _uiState.value = _uiState.value.copy(loading = true, errorMessage = null)
+                try {
+                    repo.move(sourcePath, destPath, entry.isDirectory)
+                    _uiState.value = _uiState.value.copy(
+                        loading = false,
+                        move = null,
+                        statusMessage = "Moved ${entry.name}"
+                    )
+                    refresh()
+                } catch (e: Exception) {
+                    _uiState.value = _uiState.value.copy(
+                        loading = false,
+                        move = null,
+                        errorMessage = "Move failed: ${e.message}"
+                    )
+                }
+            }
             return
         }
+
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(loading = true, errorMessage = null)
-            try {
-                repo.move(sourcePath, destPath, move.entry.isDirectory)
-                _uiState.value = _uiState.value.copy(
-                    loading = false,
-                    move = null,
-                    statusMessage = "Moved ${move.entry.name}"
-                )
-                refresh()
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    loading = false,
-                    move = null,
-                    errorMessage = "Move failed: ${e.message}"
-                )
+            var moved = 0
+            var skipped = 0
+            var failed = 0
+            for (entry in move.entries) {
+                val sourcePath = fullPath(move.sourcePath, entry.name)
+                val destPath = fullPath(current, entry.name)
+                if (sourcePath == destPath) {
+                    skipped++
+                    continue
+                }
+                try {
+                    repo.move(sourcePath, destPath, entry.isDirectory)
+                    moved++
+                } catch (e: Exception) {
+                    failed++
+                }
             }
+            val message = buildString {
+                append("Moved $moved item")
+                if (moved != 1) append("s")
+                if (skipped > 0) append(", $skipped already here")
+                if (failed > 0) append(", $failed failed")
+            }
+            _uiState.value = _uiState.value.copy(
+                loading = false,
+                move = null,
+                statusMessage = if (failed == 0) message else null,
+                errorMessage = if (failed > 0) message else null
+            )
+            refresh()
         }
+    }
+
+    fun toggleSelection(entry: NasEntry) {
+        val current = _uiState.value.selectedNames
+        val updated = if (current.contains(entry.name)) current - entry.name else current + entry.name
+        _uiState.value = _uiState.value.copy(selectedNames = updated)
+    }
+
+    fun clearSelection() {
+        _uiState.value = _uiState.value.copy(selectedNames = emptySet())
     }
 
     fun requestCreateFolder() {

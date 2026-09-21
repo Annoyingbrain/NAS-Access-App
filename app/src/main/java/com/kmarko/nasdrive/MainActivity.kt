@@ -91,6 +91,10 @@ class MainActivity : ComponentActivity() {
                         onRequestRename = { viewModel.requestRename(it) },
                         onCancelRename = { viewModel.cancelRename() },
                         onConfirmRename = { viewModel.confirmRename(it) },
+                        onToggleSelection = { viewModel.toggleSelection(it) },
+                        onClearSelection = { viewModel.clearSelection() },
+                        onDeleteSelected = { viewModel.requestDeleteSelected() },
+                        onMoveSelected = { viewModel.startMoveSelected() },
                         onDismissMessage = { viewModel.clearMessages() }
                     )
                 }

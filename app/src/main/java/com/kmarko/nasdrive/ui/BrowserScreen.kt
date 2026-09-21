@@ -1,6 +1,7 @@
 package com.kmarko.nasdrive.ui
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
@@ -27,6 +29,7 @@ import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -56,7 +59,7 @@ import com.kmarko.nasdrive.MoveState
 import com.kmarko.nasdrive.NasEntry
 import com.kmarko.nasdrive.UiState
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun BrowserScreen(
     state: UiState,
@@ -79,6 +82,10 @@ fun BrowserScreen(
     onRequestRename: (NasEntry) -> Unit,
     onCancelRename: () -> Unit,
     onConfirmRename: (String) -> Unit,
+    onToggleSelection: (NasEntry) -> Unit,
+    onClearSelection: () -> Unit,
+    onDeleteSelected: () -> Unit,
+    onMoveSelected: () -> Unit,
     onDismissMessage: () -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -95,27 +102,46 @@ fun BrowserScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text(if (state.currentPath.isBlank()) "/ (root)" else "/${state.currentPath}") },
-                navigationIcon = {
-                    if (state.currentPath.isNotBlank()) {
-                        IconButton(onClick = onNavigateUp) {
-                            Icon(Icons.Filled.ArrowBack, contentDescription = "Up")
+            if (state.isSelecting) {
+                TopAppBar(
+                    title = { Text("${state.selectedNames.size} selected") },
+                    navigationIcon = {
+                        IconButton(onClick = onClearSelection) {
+                            Icon(Icons.Filled.Close, contentDescription = "Cancel selection")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = onMoveSelected) {
+                            Icon(Icons.Filled.DriveFileMove, contentDescription = "Move selected")
+                        }
+                        IconButton(onClick = onDeleteSelected) {
+                            Icon(Icons.Filled.Delete, contentDescription = "Delete selected")
                         }
                     }
-                },
-                actions = {
-                    IconButton(onClick = onRefresh) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+                )
+            } else {
+                TopAppBar(
+                    title = { Text(if (state.currentPath.isBlank()) "/ (root)" else "/${state.currentPath}") },
+                    navigationIcon = {
+                        if (state.currentPath.isNotBlank()) {
+                            IconButton(onClick = onNavigateUp) {
+                                Icon(Icons.Filled.ArrowBack, contentDescription = "Up")
+                            }
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = onRefresh) {
+                            Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+                        }
+                        IconButton(onClick = onDisconnect) {
+                            Icon(Icons.Filled.Logout, contentDescription = "Disconnect")
+                        }
                     }
-                    IconButton(onClick = onDisconnect) {
-                        Icon(Icons.Filled.Logout, contentDescription = "Disconnect")
-                    }
-                }
-            )
+                )
+            }
         },
         floatingActionButton = {
-            if (!moving) {
+            if (!moving && !state.isSelecting) {
                 Column(horizontalAlignment = Alignment.End) {
                     SmallFloatingActionButton(onClick = onRequestCreateFolder) {
                         Icon(Icons.Filled.CreateNewFolder, contentDescription = "New folder")
@@ -160,13 +186,17 @@ fun BrowserScreen(
                         items(state.entries) { entry ->
                             FileRow(
                                 entry = entry,
-                                actionsEnabled = !moving,
+                                actionsEnabled = !moving && !state.isSelecting,
+                                selecting = state.isSelecting,
+                                isSelected = state.selectedNames.contains(entry.name),
+                                moving = moving,
                                 onOpenFolder = onOpenFolder,
                                 onOpen = onOpen,
                                 onDownload = onDownload,
                                 onDelete = onRequestDelete,
                                 onMove = onStartMove,
-                                onRename = onRequestRename
+                                onRename = onRequestRename,
+                                onToggleSelection = onToggleSelection
                             )
                             HorizontalDivider()
                         }
@@ -186,16 +216,26 @@ fun BrowserScreen(
     }
 
     val pendingDelete = state.pendingDelete
-    if (pendingDelete != null) {
+    if (pendingDelete.isNotEmpty()) {
+        val single = pendingDelete.singleOrNull()
         AlertDialog(
             onDismissRequest = onCancelDelete,
-            title = { Text("Delete ${if (pendingDelete.isDirectory) "folder" else "file"}?") },
+            title = {
+                Text(
+                    if (single != null) "Delete ${if (single.isDirectory) "folder" else "file"}?"
+                    else "Delete ${pendingDelete.size} items?"
+                )
+            },
             text = {
                 Text(
-                    if (pendingDelete.isDirectory) {
-                        "\"${pendingDelete.name}\" and everything inside it will be permanently deleted from the NAS. This can't be undone."
+                    if (single != null) {
+                        if (single.isDirectory) {
+                            "\"${single.name}\" and everything inside it will be permanently deleted from the NAS. This can't be undone."
+                        } else {
+                            "\"${single.name}\" will be permanently deleted from the NAS. This can't be undone."
+                        }
                     } else {
-                        "\"${pendingDelete.name}\" will be permanently deleted from the NAS. This can't be undone."
+                        "${pendingDelete.size} items will be permanently deleted from the NAS. This can't be undone."
                     }
                 )
             },
@@ -258,7 +298,12 @@ fun BrowserScreen(
 private fun MoveBanner(move: MoveState, destination: String, onMoveHere: () -> Unit, onCancel: () -> Unit) {
     Surface(tonalElevation = 4.dp, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("Moving \"${move.entry.name}\"", style = MaterialTheme.typography.bodyLarge)
+            val title = if (move.entries.size == 1) {
+                "Moving \"${move.entries.first().name}\""
+            } else {
+                "Moving ${move.entries.size} items"
+            }
+            Text(title, style = MaterialTheme.typography.bodyLarge)
             Text("Browse to a folder, then move it here. Currently: $destination", style = MaterialTheme.typography.bodySmall)
             Row(modifier = Modifier.padding(top = 8.dp)) {
                 TextButton(onClick = onCancel) { Text("Cancel") }
@@ -268,26 +313,42 @@ private fun MoveBanner(move: MoveState, destination: String, onMoveHere: () -> U
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileRow(
     entry: NasEntry,
     actionsEnabled: Boolean,
+    selecting: Boolean,
+    isSelected: Boolean,
+    moving: Boolean,
     onOpenFolder: (String) -> Unit,
     onOpen: (NasEntry) -> Unit,
     onDownload: (NasEntry) -> Unit,
     onDelete: (NasEntry) -> Unit,
     onMove: (NasEntry) -> Unit,
-    onRename: (NasEntry) -> Unit
+    onRename: (NasEntry) -> Unit,
+    onToggleSelection: (NasEntry) -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = entry.isDirectory || actionsEnabled) {
-                if (entry.isDirectory) onOpenFolder(entry.name) else onOpen(entry)
-            }
+            .combinedClickable(
+                onClick = {
+                    when {
+                        selecting -> onToggleSelection(entry)
+                        entry.isDirectory -> onOpenFolder(entry.name)
+                        actionsEnabled -> onOpen(entry)
+                    }
+                },
+                onLongClick = { if (!moving) onToggleSelection(entry) }
+            )
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (selecting) {
+            Checkbox(checked = isSelected, onCheckedChange = { onToggleSelection(entry) })
+            Spacer(modifier = Modifier.width(8.dp))
+        }
         Icon(
             if (entry.isDirectory) Icons.Filled.Folder else Icons.Filled.InsertDriveFile,
             contentDescription = null,
