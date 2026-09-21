@@ -17,7 +17,8 @@ import java.util.Properties
 data class NasEntry(
     val name: String,
     val isDirectory: Boolean,
-    val size: Long
+    val size: Long,
+    val lastModified: Long
 )
 
 /**
@@ -59,6 +60,9 @@ class SmbRepository(private val config: SmbConfig) {
         root.connect()
     }
 
+    // Returned in whatever order the server lists them - the ViewModel applies the
+    // user's chosen sort (name/date/size) so switching sort order doesn't need a
+    // fresh listing.
     suspend fun list(path: String): List<NasEntry> = withContext(Dispatchers.IO) {
         val dir = SmbFile(buildUrl(path, true), cifsContext)
         dir.listFiles()
@@ -67,10 +71,10 @@ class SmbRepository(private val config: SmbConfig) {
                 NasEntry(
                     name = f.name.trimEnd('/'),
                     isDirectory = f.isDirectory,
-                    size = if (f.isDirectory) 0L else f.length()
+                    size = if (f.isDirectory) 0L else f.length(),
+                    lastModified = f.lastModified()
                 )
             }
-            .sortedWith(compareByDescending<NasEntry> { it.isDirectory }.thenBy { it.name.lowercase() })
     }
 
     suspend fun download(remotePath: String, destUri: Uri, resolver: ContentResolver, onProgress: (Long) -> Unit) =

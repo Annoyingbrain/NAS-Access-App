@@ -95,6 +95,7 @@ class MainActivity : ComponentActivity() {
                         onClearSelection = { viewModel.clearSelection() },
                         onDeleteSelected = { viewModel.requestDeleteSelected() },
                         onMoveSelected = { viewModel.startMoveSelected() },
+                        onSetSortOption = { viewModel.setSortOption(it) },
                         onDismissMessage = { viewModel.clearMessages() }
                     )
                 }

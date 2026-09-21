@@ -27,10 +27,13 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -57,7 +60,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kmarko.nasdrive.MoveState
 import com.kmarko.nasdrive.NasEntry
+import com.kmarko.nasdrive.SortOption
 import com.kmarko.nasdrive.UiState
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -86,6 +93,7 @@ fun BrowserScreen(
     onClearSelection: () -> Unit,
     onDeleteSelected: () -> Unit,
     onMoveSelected: () -> Unit,
+    onSetSortOption: (SortOption) -> Unit,
     onDismissMessage: () -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -130,6 +138,29 @@ fun BrowserScreen(
                         }
                     },
                     actions = {
+                        var sortMenuExpanded by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { sortMenuExpanded = true }) {
+                                Icon(Icons.Filled.Sort, contentDescription = "Sort")
+                            }
+                            DropdownMenu(
+                                expanded = sortMenuExpanded,
+                                onDismissRequest = { sortMenuExpanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Name") },
+                                    onClick = { onSetSortOption(SortOption.NAME); sortMenuExpanded = false }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Date modified") },
+                                    onClick = { onSetSortOption(SortOption.DATE_NEWEST); sortMenuExpanded = false }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Size") },
+                                    onClick = { onSetSortOption(SortOption.SIZE_LARGEST); sortMenuExpanded = false }
+                                )
+                            }
+                        }
                         IconButton(onClick = onRefresh) {
                             Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
                         }
@@ -183,7 +214,7 @@ fun BrowserScreen(
                     // under the floating New folder/Upload buttons, which sit on top of
                     // the list rather than reserving their own space.
                     LazyColumn(contentPadding = PaddingValues(bottom = 160.dp)) {
-                        items(state.entries) { entry ->
+                        items(state.displayEntries) { entry ->
                             FileRow(
                                 entry = entry,
                                 actionsEnabled = !moving && !state.isSelecting,
@@ -356,9 +387,12 @@ private fun FileRow(
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(entry.name, style = MaterialTheme.typography.bodyLarge)
-            if (!entry.isDirectory) {
-                Text(formatSize(entry.size), style = MaterialTheme.typography.bodySmall)
+            val subtitle = if (entry.isDirectory) {
+                formatDate(entry.lastModified)
+            } else {
+                "${formatSize(entry.size)} • ${formatDate(entry.lastModified)}"
             }
+            Text(subtitle, style = MaterialTheme.typography.bodySmall)
         }
         if (actionsEnabled) {
             if (!entry.isDirectory) {
@@ -396,6 +430,11 @@ private fun TransferBanner(fileName: String, isUpload: Boolean, bytesDone: Long,
             )
         }
     }
+}
+
+private fun formatDate(millis: Long): String {
+    if (millis <= 0L) return ""
+    return SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(millis))
 }
 
 private fun formatSize(bytes: Long): String {

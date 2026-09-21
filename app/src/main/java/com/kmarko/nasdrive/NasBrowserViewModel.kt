@@ -12,6 +12,8 @@ import kotlinx.coroutines.launch
 
 enum class Screen { CONNECT, BROWSE }
 
+enum class SortOption { NAME, DATE_NEWEST, SIZE_LARGEST }
+
 data class TransferProgress(
     val active: Boolean = false,
     val isUpload: Boolean = false,
@@ -43,9 +45,20 @@ data class UiState(
     val openRequest: OpenFileRequest? = null,
     val creatingFolder: Boolean = false,
     val renameTarget: NasEntry? = null,
-    val selectedNames: Set<String> = emptySet()
+    val selectedNames: Set<String> = emptySet(),
+    val sortOption: SortOption = SortOption.NAME
 ) {
     val isSelecting: Boolean get() = selectedNames.isNotEmpty()
+
+    val displayEntries: List<NasEntry>
+        get() {
+            val byType = compareByDescending<NasEntry> { it.isDirectory }
+            return when (sortOption) {
+                SortOption.NAME -> entries.sortedWith(byType.thenBy { it.name.lowercase() })
+                SortOption.DATE_NEWEST -> entries.sortedWith(byType.thenByDescending { it.lastModified })
+                SortOption.SIZE_LARGEST -> entries.sortedWith(byType.thenByDescending { it.size })
+            }
+        }
 }
 
 class NasBrowserViewModel(application: Application) : AndroidViewModel(application) {
@@ -369,6 +382,10 @@ class NasBrowserViewModel(application: Application) : AndroidViewModel(applicati
             )
             refresh()
         }
+    }
+
+    fun setSortOption(option: SortOption) {
+        _uiState.value = _uiState.value.copy(sortOption = option)
     }
 
     fun toggleSelection(entry: NasEntry) {
