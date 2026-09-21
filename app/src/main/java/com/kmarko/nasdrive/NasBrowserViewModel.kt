@@ -162,6 +162,13 @@ class NasBrowserViewModel(application: Application) : AndroidViewModel(applicati
         refresh()
     }
 
+    /** Jumps straight to an ancestor of the current path, e.g. from a breadcrumb tap. */
+    fun navigateToPath(path: String) {
+        if (path == _uiState.value.currentPath) return
+        _uiState.value = _uiState.value.copy(currentPath = path, selectedNames = emptySet())
+        refresh()
+    }
+
     fun disconnect() {
         repository?.close()
         repository = null

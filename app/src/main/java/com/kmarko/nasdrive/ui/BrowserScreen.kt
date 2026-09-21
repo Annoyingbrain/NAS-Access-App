@@ -3,7 +3,9 @@ package com.kmarko.nasdrive.ui
 import android.graphics.Bitmap
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -56,6 +58,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -64,6 +67,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kmarko.nasdrive.CopyState
 import com.kmarko.nasdrive.MoveState
@@ -81,6 +85,7 @@ fun BrowserScreen(
     state: UiState,
     onOpenFolder: (String) -> Unit,
     onNavigateUp: () -> Unit,
+    onNavigateToPath: (String) -> Unit,
     onRefresh: () -> Unit,
     onDisconnect: () -> Unit,
     onDownload: (NasEntry) -> Unit,
@@ -147,7 +152,7 @@ fun BrowserScreen(
                 )
             } else {
                 TopAppBar(
-                    title = { Text(if (state.currentPath.isBlank()) "/ (root)" else "/${state.currentPath}") },
+                    title = { Breadcrumb(currentPath = state.currentPath, onNavigate = onNavigateToPath) },
                     navigationIcon = {
                         if (state.currentPath.isNotBlank()) {
                             IconButton(onClick = onNavigateUp) {
@@ -349,6 +354,37 @@ fun BrowserScreen(
                 TextButton(onClick = onCancelRename) { Text("Cancel") }
             }
         )
+    }
+}
+
+@Composable
+private fun Breadcrumb(currentPath: String, onNavigate: (String) -> Unit) {
+    val segments = remember(currentPath) {
+        val crumbs = mutableListOf("Root" to "")
+        var accumulated = ""
+        for (part in currentPath.split("/").filter { it.isNotBlank() }) {
+            accumulated = if (accumulated.isBlank()) part else "$accumulated/$part"
+            crumbs.add(part to accumulated)
+        }
+        crumbs
+    }
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        segments.forEachIndexed { index, (label, path) ->
+            val isLast = index == segments.lastIndex
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal,
+                maxLines = 1,
+                modifier = if (isLast) Modifier else Modifier.clickable { onNavigate(path) }
+            )
+            if (!isLast) {
+                Text(" / ", style = MaterialTheme.typography.titleMedium)
+            }
+        }
     }
 }
 

@@ -71,6 +71,7 @@ class MainActivity : ComponentActivity() {
                         state = state,
                         onOpenFolder = { viewModel.openFolder(it) },
                         onNavigateUp = { viewModel.navigateUp() },
+                        onNavigateToPath = { viewModel.navigateToPath(it) },
                         onRefresh = { viewModel.refresh() },
                         onDisconnect = { viewModel.disconnect() },
                         onDownload = { entry ->
